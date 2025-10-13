@@ -1,8 +1,8 @@
-
 import React, { useState, useCallback } from 'react';
 import { User, UserRole } from './types';
 import Header from './components/Header';
 import Footer from './components/Footer';
+import LandingPage from './components/LandingPage';
 import RoleSelection from './components/RoleSelection';
 import AuthForm from './components/AuthForm';
 import OnboardingStudent from './components/OnboardingStudent';
@@ -12,10 +12,10 @@ import DashboardStudent from './components/DashboardStudent';
 import DashboardTeacher from './components/DashboardTeacher';
 import DashboardAdmin from './components/DashboardAdmin';
 
-type View = 'ROLE_SELECTION' | 'AUTH' | 'ONBOARDING' | 'DASHBOARD';
+type View = 'LANDING' | 'ROLE_SELECTION' | 'AUTH' | 'ONBOARDING' | 'DASHBOARD';
 
 export default function App() {
-  const [view, setView] = useState<View>('ROLE_SELECTION');
+  const [view, setView] = useState<View>('LANDING');
   const [userRole, setUserRole] = useState<UserRole | null>(null);
   const [user, setUser] = useState<User | null>(null);
 
@@ -39,8 +39,15 @@ export default function App() {
   const handleLogout = useCallback(() => {
     setUser(null);
     setUserRole(null);
-    setView('ROLE_SELECTION');
+    setView('LANDING');
   }, []);
+  
+  const handleBackToHome = useCallback(() => {
+    setUser(null);
+    setUserRole(null);
+    setView('LANDING');
+  }, []);
+
 
   const renderOnboarding = () => {
     if (!user) return null;
@@ -72,6 +79,8 @@ export default function App() {
 
   const renderContent = () => {
     switch (view) {
+      case 'LANDING':
+        return <LandingPage onSelectRole={handleRoleSelect} />;
       case 'ROLE_SELECTION':
         return <RoleSelection onSelectRole={handleRoleSelect} />;
       case 'AUTH':
@@ -81,13 +90,13 @@ export default function App() {
       case 'DASHBOARD':
         return renderDashboard();
       default:
-        return <RoleSelection onSelectRole={handleRoleSelect} />;
+        return <LandingPage onSelectRole={handleRoleSelect} />;
     }
   };
 
   return (
     <div className="flex flex-col min-h-screen bg-slate-100 font-sans">
-      <Header user={user} onLogout={handleLogout} />
+      <Header user={user} onLogout={handleLogout} onLogoClick={handleBackToHome} />
       <main className="flex-grow flex items-center justify-center p-4 md:p-8">
         <div className="w-full max-w-6xl mx-auto">
           {renderContent()}

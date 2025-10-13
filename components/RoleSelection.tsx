@@ -1,9 +1,7 @@
-
 import React from 'react';
 import { UserRole } from '../types';
 import AcademicCapIcon from './icons/AcademicCapIcon';
 import BriefcaseIcon from './icons/BriefcaseIcon';
-import ShieldCheckIcon from './icons/ShieldCheckIcon';
 
 interface RoleSelectionProps {
   onSelectRole: (role: UserRole) => void;
@@ -44,12 +42,6 @@ const RoleSelection: React.FC<RoleSelectionProps> = ({ onSelectRole }) => {
           description="Create quizzes, assign homework, and monitor your class's performance."
           icon={<BriefcaseIcon className="h-10 w-10 text-blue-600" />}
           onClick={() => onSelectRole(UserRole.TEACHER)}
-        />
-        <RoleCard
-          role={UserRole.ADMIN}
-          description="Manage users, oversee platform content, and view system-wide analytics."
-          icon={<ShieldCheckIcon className="h-10 w-10 text-blue-600" />}
-          onClick={() => onSelectRole(UserRole.ADMIN)}
         />
       </div>
     </div>
