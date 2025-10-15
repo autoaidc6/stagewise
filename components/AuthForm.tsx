@@ -8,7 +8,7 @@ interface AuthFormProps {
 }
 
 const AuthForm: React.FC<AuthFormProps> = ({ role, onAuthSuccess }) => {
-  const [isLogin, setIsLogin] = useState(false);
+  const [isLogin, setIsLogin] = useState(true); // Default to Sign In mode
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -25,7 +25,7 @@ const AuthForm: React.FC<AuthFormProps> = ({ role, onAuthSuccess }) => {
         {role} {isLogin ? 'Sign In' : 'Sign Up'}
       </h2>
       <p className="text-center text-slate-500 mb-8">
-        {isLogin ? 'Welcome back!' : 'Create your account to continue.'}
+        {isLogin ? 'Welcome back! Sign in to your account.' : 'Create an account to get started.'}
       </p>
       <form onSubmit={handleSubmit} className="space-y-6">
         {!isLogin && (
