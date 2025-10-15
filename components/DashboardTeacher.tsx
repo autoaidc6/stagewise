@@ -8,9 +8,12 @@ import XMarkIcon from './icons/XMarkIcon';
 import CreateQuizOptions from './CreateQuizOptions';
 import AIQuizGenerator from './AIQuizGenerator';
 import UploadQuiz from './UploadQuiz';
+import ConfirmationDialog from './ConfirmationDialog';
 
 interface DashboardTeacherProps {
   user: User;
+  quizzes: Quiz[];
+  onSaveQuiz: (quiz: Quiz) => void;
 }
 
 const DashboardCard: React.FC<{ title: string; description: string; icon: React.ReactNode; actionText: string; onClick?: () => void; }> = ({ title, description, icon, actionText, onClick }) => (
@@ -32,17 +35,15 @@ const DashboardCard: React.FC<{ title: string; description: string; icon: React.
 
 type CreationStep = 'options' | 'manual' | 'ai' | 'upload' | 'closed';
 
-const DashboardTeacher: React.FC<DashboardTeacherProps> = ({ user }) => {
+const DashboardTeacher: React.FC<DashboardTeacherProps> = ({ user, quizzes, onSaveQuiz }) => {
   const [creationStep, setCreationStep] = useState<CreationStep>('closed');
   const [generatedQuizData, setGeneratedQuizData] = useState<Quiz | null>(null);
-  const [quizzes, setQuizzes] = useState([
-    { title: "KS3 Science - Cell Biology", class: "Year 9 Science", submissions: "22 / 25", avgScore: "85%" },
-    { title: "KS4 Maths - Algebra", class: "Year 10 Maths", submissions: "15 / 20", avgScore: "72%" }
-  ]);
   const [draftQuizzes, setDraftQuizzes] = useState<Quiz[]>([]);
   const [editingQuiz, setEditingQuiz] = useState<Quiz | null>(null);
+  const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
+  const [draftToDelete, setDraftToDelete] = useState<Quiz['id'] | null>(null);
 
-  useEffect(() => {
+  const loadDrafts = () => {
     const loadedDrafts: Quiz[] = [];
     for (let i = 0; i < localStorage.length; i++) {
         const key = localStorage.key(i);
@@ -56,25 +57,34 @@ const DashboardTeacher: React.FC<DashboardTeacherProps> = ({ user }) => {
         }
     }
     setDraftQuizzes(loadedDrafts);
+  }
+
+  useEffect(() => {
+    loadDrafts();
   }, []);
 
-  const handleSaveQuiz = (newQuiz: Quiz, draftIdToRemove?: string | number) => {
-    console.log("Quiz saved:", newQuiz);
-    setQuizzes(prev => [...prev, {
-        title: newQuiz.title,
-        class: newQuiz.keyStage,
-        submissions: "0 / 20",
-        avgScore: "N/A"
-    }]);
-    setCreationStep('closed');
-    setEditingQuiz(null);
-    setGeneratedQuizData(null);
-
-    if (draftIdToRemove) {
-        localStorage.removeItem(`quiz-draft-${draftIdToRemove}`);
-        setDraftQuizzes(prev => prev.filter(d => d.id !== draftIdToRemove));
+  const handleSaveQuiz = (quizToSave: Quiz) => {
+    onSaveQuiz(quizToSave);
+    
+    // If it was a draft being edited and saved, remove the draft
+    if (quizToSave.id && String(quizToSave.id).startsWith('draft-')) {
+        localStorage.removeItem(`quiz-draft-${quizToSave.id}`);
     }
+
+    handleCloseQuizFlows();
   };
+  
+  const handlePublishDraft = (draftId: Quiz['id']) => {
+    if (!draftId) return;
+    const draftToPublish = draftQuizzes.find(d => d.id === draftId);
+    if (draftToPublish) {
+        // Create a new ID for the published quiz to avoid conflicts
+        const publishedQuiz = { ...draftToPublish, id: `quiz-${Date.now()}`};
+        onSaveQuiz(publishedQuiz);
+        localStorage.removeItem(`quiz-draft-${draftId}`);
+        loadDrafts(); // Refresh drafts list
+    }
+  }
 
   const handleOpenEditFlow = (quiz: Quiz) => {
     setEditingQuiz(quiz);
@@ -83,31 +93,25 @@ const DashboardTeacher: React.FC<DashboardTeacherProps> = ({ user }) => {
   };
   
   const handleCloseQuizFlows = () => {
-    // When a draft is saved, we need to reload the drafts list
-    const loadedDrafts: Quiz[] = [];
-    for (let i = 0; i < localStorage.length; i++) {
-        const key = localStorage.key(i);
-        if (key && key.startsWith('quiz-draft-')) {
-            try {
-                const draft = JSON.parse(localStorage.getItem(key)!);
-                loadedDrafts.push(draft);
-            } catch (e) {
-                console.error("Failed to parse draft from localStorage", e);
-            }
-        }
-    }
-    setDraftQuizzes(loadedDrafts);
+    loadDrafts();
     setCreationStep('closed');
     setEditingQuiz(null);
     setGeneratedQuizData(null);
   }
 
   const handleDeleteDraft = (draftId: string | number) => {
-      if (window.confirm("Are you sure you want to delete this draft?")) {
-          localStorage.removeItem(`quiz-draft-${draftId}`);
-          setDraftQuizzes(prev => prev.filter(d => d.id !== draftId));
-      }
+      setDraftToDelete(draftId);
+      setIsDeleteConfirmOpen(true);
   }
+
+  const confirmDeleteDraft = () => {
+    if (draftToDelete) {
+        localStorage.removeItem(`quiz-draft-${draftToDelete}`);
+        setDraftQuizzes(prev => prev.filter(d => d.id !== draftToDelete));
+    }
+    setIsDeleteConfirmOpen(false);
+    setDraftToDelete(null);
+  };
 
   const handleQuizGenerated = (quizData: Quiz) => {
     setGeneratedQuizData(quizData);
@@ -165,24 +169,28 @@ const DashboardTeacher: React.FC<DashboardTeacherProps> = ({ user }) => {
               actionText="Assign Homework"
           />
           <div className="bg-white rounded-xl shadow-lg p-6 md:col-span-2 lg:col-span-3">
-              <h3 className="text-lg font-bold text-slate-800 mb-4">Active Quizzes</h3>
+              <h3 className="text-lg font-bold text-slate-800 mb-4">Published Quizzes</h3>
               <div className="overflow-x-auto">
                   <table className="w-full text-left">
                       <thead className="text-sm text-slate-500 uppercase bg-slate-50">
                           <tr>
                               <th className="p-3">Quiz Title</th>
-                              <th className="p-3">Class</th>
-                              <th className="p-3">Submissions</th>
-                              <th className="p-3">Avg. Score</th>
+                              <th className="p-3">Subject</th>
+                              <th className="p-3">Questions</th>
+                              <th className="p-3 text-right">Actions</th>
                           </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-200">
-                        {quizzes.map((quiz, index) => (
-                          <tr key={index} className="hover:bg-slate-50">
+                        {quizzes.map((quiz) => (
+                          <tr key={quiz.id} className="hover:bg-slate-50">
                               <td className="p-3 font-medium text-slate-800">{quiz.title}</td>
-                              <td className="p-3 text-slate-600">{quiz.class}</td>
-                              <td className="p-3 text-slate-600">{quiz.submissions}</td>
-                              <td className="p-3 text-slate-600">{quiz.avgScore}</td>
+                              <td className="p-3 text-slate-600">{quiz.subject}</td>
+                              <td className="p-3 text-slate-600">{quiz.questions.length}</td>
+                              <td className="p-3 text-right">
+                                  <button onClick={() => handleOpenEditFlow(quiz)} className="flex items-center gap-1 text-sm text-blue-600 hover:text-blue-800 font-semibold ml-auto">
+                                      <PencilIcon className="w-4 h-4" /> Edit
+                                  </button>
+                              </td>
                           </tr>
                         ))}
                       </tbody>
@@ -209,7 +217,10 @@ const DashboardTeacher: React.FC<DashboardTeacherProps> = ({ user }) => {
                               <td className="p-3 text-slate-600">{draft.subject}</td>
                               <td className="p-3 text-slate-600">{draft.questions.length}</td>
                               <td className="p-3 text-right">
-                                <div className="flex justify-end items-center gap-2">
+                                <div className="flex justify-end items-center gap-4">
+                                  <button onClick={() => handlePublishDraft(draft.id!)} className="text-sm text-green-600 hover:text-green-800 font-semibold">
+                                      Publish
+                                  </button>
                                   <button onClick={() => handleOpenEditFlow(draft)} className="flex items-center gap-1 text-sm text-blue-600 hover:text-blue-800 font-semibold">
                                       <PencilIcon className="w-4 h-4" /> Edit
                                   </button>
@@ -228,6 +239,17 @@ const DashboardTeacher: React.FC<DashboardTeacherProps> = ({ user }) => {
         </div>
       </div>
       {renderCreationModals()}
+      <ConfirmationDialog
+        isOpen={isDeleteConfirmOpen}
+        title="Delete Draft"
+        message="Are you sure you want to permanently delete this quiz draft? This action cannot be undone."
+        confirmText="Delete"
+        onConfirm={confirmDeleteDraft}
+        onCancel={() => {
+            setIsDeleteConfirmOpen(false);
+            setDraftToDelete(null);
+        }}
+    />
     </>
   );
 };

@@ -1,5 +1,5 @@
 import React, { useState, useCallback } from 'react';
-import { User, UserRole } from './types';
+import { User, UserRole, Quiz } from './types';
 import Header from './components/Header';
 import Footer from './components/Footer';
 import LandingPage from './components/LandingPage';
@@ -14,10 +14,50 @@ import DashboardAdmin from './components/DashboardAdmin';
 
 type View = 'LANDING' | 'ROLE_SELECTION' | 'AUTH' | 'ONBOARDING' | 'DASHBOARD';
 
+const initialQuizzes: Quiz[] = [
+    { 
+        id: "quiz-1",
+        title: "KS3 Science - Cell Biology", 
+        subject: "Science",
+        keyStage: "KS3",
+        difficulty: "Medium",
+        questions: [
+            { id: 1, text: "What is the powerhouse of the cell?", options: ["Nucleus", "Ribosome", "Mitochondrion", "Cell Membrane"], correctAnswerIndex: 2 },
+            { id: 2, text: "Which part of the cell contains the genetic material?", options: ["Cytoplasm", "Nucleus", "Vacuole", "Golgi Apparatus"], correctAnswerIndex: 1 }
+        ]
+    },
+    { 
+        id: "quiz-2",
+        title: "KS4 Maths - Algebra",
+        subject: "Mathematics",
+        keyStage: "KS4",
+        difficulty: "Hard",
+        questions: [
+            { id: 1, text: "Solve for x: 2x + 5 = 15", options: ["5", "10", "2.5", "7.5"], correctAnswerIndex: 0 },
+        ]
+    }
+];
+
 export default function App() {
   const [view, setView] = useState<View>('LANDING');
   const [userRole, setUserRole] = useState<UserRole | null>(null);
   const [user, setUser] = useState<User | null>(null);
+  const [quizzes, setQuizzes] = useState<Quiz[]>(initialQuizzes);
+
+  const handleSaveQuiz = useCallback((quizToSave: Quiz) => {
+    setQuizzes(prevQuizzes => {
+        const existingIndex = prevQuizzes.findIndex(q => q.id === quizToSave.id);
+        if (existingIndex > -1) {
+            // Update existing quiz
+            const newQuizzes = [...prevQuizzes];
+            newQuizzes[existingIndex] = quizToSave;
+            return newQuizzes;
+        } else {
+            // Add new quiz with a unique ID if it doesn't have one
+            return [...prevQuizzes, { ...quizToSave, id: quizToSave.id || `quiz-${Date.now()}` }];
+        }
+    });
+  }, []);
 
   const handleRoleSelect = useCallback((role: UserRole) => {
     setUserRole(role);
@@ -67,9 +107,9 @@ export default function App() {
     if (!user) return null;
     switch (user.role) {
       case UserRole.STUDENT:
-        return <DashboardStudent user={user} />;
+        return <DashboardStudent user={user} quizzes={quizzes} />;
       case UserRole.TEACHER:
-        return <DashboardTeacher user={user} />;
+        return <DashboardTeacher user={user} quizzes={quizzes} onSaveQuiz={handleSaveQuiz} />;
       case UserRole.ADMIN:
         return <DashboardAdmin user={user} />;
       default:

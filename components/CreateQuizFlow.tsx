@@ -2,31 +2,38 @@ import React, { useState, useEffect } from 'react';
 import type { Quiz, Question } from '../types';
 import XMarkIcon from './icons/XMarkIcon';
 import PlusCircleIcon from './icons/PlusCircleIcon';
+import ConfirmationDialog from './ConfirmationDialog';
 
 interface CreateQuizFlowProps {
   userSubjects: string[];
   onClose: () => void;
-  onSave: (quiz: Quiz, draftIdToRemove?: string | number) => void;
+  onSave: (quiz: Quiz) => void;
   initialData?: Quiz | null;
 }
 
 const keyStages = ["KS1", "KS2", "KS3", "KS4"];
 const difficulties = ["Easy", "Medium", "Hard"];
 
+const defaultQuizDetails = (firstSubject: string) => ({
+  title: '',
+  subject: firstSubject || '',
+  keyStage: 'KS3',
+  difficulty: 'Medium' as 'Easy' | 'Medium' | 'Hard',
+});
+
+const defaultQuestion = {
+  text: '',
+  options: ['', '', '', ''],
+  correctAnswerIndex: 0,
+};
+
 const CreateQuizFlow: React.FC<CreateQuizFlowProps> = ({ userSubjects, onClose, onSave, initialData }) => {
   const [step, setStep] = useState(1);
-  const [quizDetails, setQuizDetails] = useState({
-    title: '',
-    subject: userSubjects[0] || '',
-    keyStage: 'KS3',
-    difficulty: 'Medium' as 'Easy' | 'Medium' | 'Hard',
-  });
+  const [quizDetails, setQuizDetails] = useState(defaultQuizDetails(userSubjects[0]));
   const [questions, setQuestions] = useState<Question[]>([]);
-  const [currentQuestion, setCurrentQuestion] = useState({
-    text: '',
-    options: ['', '', '', ''],
-    correctAnswerIndex: 0,
-  });
+  const [currentQuestion, setCurrentQuestion] = useState(defaultQuestion);
+  const [isDirty, setIsDirty] = useState(false);
+  const [isCloseConfirmOpen, setIsCloseConfirmOpen] = useState(false);
 
   useEffect(() => {
     if (initialData) {
@@ -37,42 +44,51 @@ const CreateQuizFlow: React.FC<CreateQuizFlowProps> = ({ userSubjects, onClose, 
         difficulty: initialData.difficulty,
       });
       setQuestions(initialData.questions);
+      setStep(initialData.questions.length > 0 ? 2 : 1);
+    } else {
+      // Reset to default state if initialData is null/undefined (e.g., creating a new manual quiz)
+      setQuizDetails(defaultQuizDetails(userSubjects[0]));
+      setQuestions([]);
+      setCurrentQuestion(defaultQuestion);
+      setStep(1);
     }
-  }, [initialData]);
+    setIsDirty(false);
+  }, [initialData, userSubjects]);
 
 
   const handleDetailChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+    setIsDirty(true);
     const { name, value } = e.target;
     setQuizDetails(prev => ({ ...prev, [name]: value }));
   };
   
   const handleQuestionTextChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    setIsDirty(true);
     setCurrentQuestion(prev => ({ ...prev, text: e.target.value }));
   }
 
   const handleOptionChange = (index: number, value: string) => {
+    setIsDirty(true);
     const newOptions = [...currentQuestion.options];
     newOptions[index] = value;
     setCurrentQuestion(prev => ({ ...prev, options: newOptions }));
   };
   
   const handleCorrectAnswerChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    setIsDirty(true);
     setCurrentQuestion(prev => ({...prev, correctAnswerIndex: parseInt(e.target.value, 10) }));
   }
 
   const handleAddQuestion = () => {
     if (currentQuestion.text.trim() && currentQuestion.options.every(o => o.trim())) {
+      setIsDirty(true);
       const newQuestion: Question = {
         id: Date.now(),
         ...currentQuestion
       };
       setQuestions(prev => [...prev, newQuestion]);
       // Reset for next question
-      setCurrentQuestion({
-        text: '',
-        options: ['', '', '', ''],
-        correctAnswerIndex: 0,
-      });
+      setCurrentQuestion(defaultQuestion);
     } else {
         alert("Please fill in the question and all four options.");
     }
@@ -83,7 +99,7 @@ const CreateQuizFlow: React.FC<CreateQuizFlowProps> = ({ userSubjects, onClose, 
         alert("Please add at least one question to the quiz.");
         return;
     }
-    onSave({ ...quizDetails, questions }, initialData?.id);
+    onSave({ ...quizDetails, id: initialData?.id, questions });
   };
   
   const handleSaveDraft = () => {
@@ -91,7 +107,7 @@ const CreateQuizFlow: React.FC<CreateQuizFlowProps> = ({ userSubjects, onClose, 
         alert("Please enter a title before saving a draft.");
         return;
     }
-    const draftId = initialData?.id || `draft-${Date.now()}`;
+    const draftId = initialData?.id && String(initialData.id).startsWith('draft-') ? initialData.id : `draft-${Date.now()}`;
     const draftQuiz: Quiz = {
         id: draftId,
         ...quizDetails,
@@ -100,6 +116,14 @@ const CreateQuizFlow: React.FC<CreateQuizFlowProps> = ({ userSubjects, onClose, 
     localStorage.setItem(`quiz-draft-${draftId}`, JSON.stringify(draftQuiz));
     alert('Draft saved successfully!');
     onClose();
+  };
+
+  const handleAttemptClose = () => {
+    if (isDirty) {
+        setIsCloseConfirmOpen(true);
+    } else {
+        onClose();
+    }
   };
 
   const Step1 = () => (
@@ -138,7 +162,7 @@ const CreateQuizFlow: React.FC<CreateQuizFlowProps> = ({ userSubjects, onClose, 
   const Step2 = () => (
     <>
       <h3 className="text-2xl font-bold text-slate-800">Add Questions</h3>
-      <p className="text-slate-500 mb-6">Create the questions for your quiz.</p>
+      <p className="text-slate-500 mb-6">Create or edit the questions for your quiz.</p>
       <div className="bg-slate-50 p-4 rounded-lg space-y-4 mb-6">
         <div>
             <label htmlFor="questionText" className="block text-sm font-medium text-slate-700">Question</label>
@@ -182,10 +206,21 @@ const CreateQuizFlow: React.FC<CreateQuizFlowProps> = ({ userSubjects, onClose, 
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+      <ConfirmationDialog
+        isOpen={isCloseConfirmOpen}
+        title="Discard Changes?"
+        message="You have unsaved changes. Are you sure you want to discard them and close the editor?"
+        confirmText="Discard"
+        onConfirm={() => {
+            setIsCloseConfirmOpen(false);
+            onClose();
+        }}
+        onCancel={() => setIsCloseConfirmOpen(false)}
+      />
       <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col">
         <div className="p-6 border-b flex justify-between items-center">
             <h2 className="text-lg font-semibold text-slate-600">{initialData ? 'Edit Quiz' : 'Create New Quiz'} - Step {step} of 2</h2>
-            <button onClick={onClose} className="text-slate-400 hover:text-slate-600">
+            <button onClick={handleAttemptClose} className="text-slate-400 hover:text-slate-600">
                 <XMarkIcon className="w-6 h-6" />
             </button>
         </div>
@@ -212,11 +247,11 @@ const CreateQuizFlow: React.FC<CreateQuizFlowProps> = ({ userSubjects, onClose, 
             <div>
                  {step === 1 ? (
                     <button onClick={() => setStep(2)} className="px-6 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700" disabled={!quizDetails.title}>
-                        Next
+                        Next: Add Questions
                     </button>
                 ) : (
                     <button onClick={handleSubmit} className="px-6 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700" disabled={questions.length === 0}>
-                        Save Quiz
+                        Save & Publish Quiz
                     </button>
                 )}
             </div>
